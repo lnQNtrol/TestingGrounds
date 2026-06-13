@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0f">
+<title>SEN Calypso BLE Harness V4</title>
+<style>
+:root{--bg:#0a0c0f;--bg2:#11141a;--bg3:#171b22;--border:rgba(255,255,255,.1);--text:#f4f3ef;--text2:#bdbab1;--text3:#6f6d67;--accent:#7eb8c4;--gold:#c8a96e;--green:#7ab87a;--warn:#e07a5f;--red:#d4574e;--violet:#d9b3ff;--mono:'IBM Plex Mono','SF Mono',Menlo,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.5;max-width:760px;margin:0 auto;padding:14px calc(14px) calc(40px + env(safe-area-inset-bottom))}
+h1{font-size:17px;font-weight:700;margin-bottom:2px}
+.sub{font-size:10px;color:var(--text3);margin-bottom:14px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+.panel h2{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+button{font-family:var(--mono);cursor:pointer;font-size:12px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);min-height:42px}
+button.primary{background:var(--accent);color:#0a0c0f;border-color:var(--accent);font-weight:600}
+button.gold{background:var(--gold);color:#0a0c0f;border-color:var(--gold);font-weight:600}
+button.warn{color:var(--warn);border-color:rgba(224,122,95,.4)}
+button:disabled{opacity:.4;pointer-events:none}
+input{font-family:var(--mono);font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px;width:100%;min-height:40px}
+label.ck{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);cursor:pointer}
+label.ck input{width:auto;min-height:auto;flex:0 0 auto}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1}
+.row button{flex:0 0 auto}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--text3);display:inline-block;margin-right:7px;vertical-align:middle}
+.dot.on{background:var(--green)}.dot.scan{background:var(--gold);animation:p 1s infinite}.dot.err{background:var(--red)}
+@keyframes p{50%{opacity:.4}}
+.scs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.sc{flex:1;min-width:64px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px}
+.sc .l{font-size:8px;color:var(--text3);text-transform:uppercase}
+.sc .v{font-size:18px;font-weight:700;color:var(--accent)}
+.sc .u{font-size:8px;color:var(--text2)}
+.log{background:#06080b;border:1px solid var(--border);border-radius:8px;padding:10px;height:320px;overflow-y:auto;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.log .rx{color:var(--green)}.log .tx{color:var(--gold)}.log .sys{color:var(--text3)}.log .er{color:var(--red)}.log .hl{color:var(--accent);font-weight:600}.log .wu{color:var(--gold);font-weight:600}.log .hs{color:var(--violet);font-weight:600}.log .other{color:#ff9ed8;font-weight:600}
+.note{font-size:10px;color:var(--text3);line-height:1.7;margin-top:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{flex:0 0 auto;font-size:11px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);min-height:auto}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;margin-left:8px}
+.tag.stale{background:rgba(224,122,95,.15);color:var(--warn)}
+.tag.live{background:rgba(122,184,122,.15);color:var(--green)}
+.tag.idle{background:rgba(200,169,110,.15);color:var(--gold)}
+.kv{font-size:10px;color:var(--text2);line-height:1.8}
+.kv b{color:var(--accent)}
+.info-line{font-size:10px;color:var(--text2);margin-top:6px}
+.info-line b{color:var(--gold)}
+.disco{font-size:10px;color:var(--text2);line-height:1.7;margin-top:6px}
+.disco b{color:var(--violet)}
+</style>
+</head>
+<body>
+<h1>SEN · Calypso BLE Harness <span style="font-size:11px;color:var(--text3)">V4</span></h1>
+<div class="sub">Branch 1.6.5 · handshake (proven in V3) + full service discovery. Subscribes to EVERY notify characteristic on the device and logs all of them, to locate where temperature &amp; humidity are sent (they are NOT in the :WU wind sentence — 6 fields only). Chrome on Android/desktop · HTTPS required.</div>
+
+<div class="panel">
+  <h2>Connection</h2>
+  <div class="row">
+    <span style="flex:1"><span class="dot" id="dot"></span><span id="status">Disconnected</span></span>
+    <button class="primary" id="connbtn" onclick="toggleBLE()">Connect</button>
+  </div>
+  <div style="margin-top:10px"><label class="ck"><input type="checkbox" id="autoHs" checked> Auto-send handshake on connect</label></div>
+  <div style="margin-top:6px"><label class="ck"><input type="checkbox" id="subAll" checked> Subscribe to ALL notify characteristics (discovery)</label></div>
+  <div class="kv" id="conn-detail" style="margin-top:10px"></div>
+  <div class="info-line" id="device-info"></div>
+</div>
+
+<div class="panel">
+  <h2>Discovered services &amp; characteristics</h2>
+  <div class="disco" id="disco">Connect to enumerate. Each notify characteristic is subscribed and its data logged below with its UUID, so temp/RH on any characteristic will surface.</div>
+</div>
+
+<div class="panel">
+  <h2>Live readings <span class="tag" id="live-tag"></span></h2>
+  <div class="scs">
+    <div class="sc"><div class="l">Instant</div><div class="v" id="p-spd">—</div><div class="u">m/s</div></div>
+    <div class="sc"><div class="l">Average</div><div class="v" id="p-avg">—</div><div class="u">m/s</div></div>
+    <div class="sc"><div class="l">Direction</div><div class="v" id="p-dir">—</div><div class="u">deg</div></div>
+  </div>
+  <div class="scs" style="margin-top:8px">
+    <div class="sc"><div class="l">Temp</div><div class="v" id="p-temp">—</div><div class="u">°C</div></div>
+    <div class="sc"><div class="l">Humidity</div><div class="v" id="p-hum">—</div><div class="u">%RH</div></div>
+    <div class="sc"><div class="l">Battery</div><div class="v" id="p-batt">—</div><div class="u">%</div></div>
+  </div>
+  <div class="note" id="parse-note">:WU wind = 6 fields (no temp/RH). Temp/RH/battery, if present, will appear from another characteristic — watch the pink «OTHER» log lines and the discovery panel.</div>
+</div>
+
+<div class="panel">
+  <h2>Activation handshake</h2>
+  <div class="row" style="margin-bottom:8px">
+    <button class="gold" id="hsbtn" onclick="runHandshake()" style="flex:1">Send full handshake</button>
+    <button onclick="sendOne(':PS,1,1,9F')" style="flex:1">Send :PS only</button>
+  </div>
+  <div class="row">
+    <button onclick="toggleKeepalive()" id="kabtn" style="flex:1">Start :CC keepalive</button>
+    <button onclick="stopHandshakeAndKa()" class="warn" style="flex:1">Stop all</button>
+  </div>
+  <div class="note">Proven sequence (FFF1, \r\r terminated): :DU,1668647648,A7 · :GK · <b>:PS,1,1,9F</b> · :WU,5 · :WU,6 · :VR, then :CC,6,86 every 10s. Try the extra temp/RH probes below if temp/RH don't appear from discovery.</div>
+</div>
+
+<div class="panel">
+  <h2>Temp/RH probe commands · experimentation</h2>
+  <div class="chips" id="probes"></div>
+  <div class="row" style="margin-top:8px">
+    <input id="cmd" placeholder="ASCII :XX...  or hex  3a ..." value="">
+    <button class="primary" onclick="sendCmd()">Send</button>
+  </div>
+  <div class="note">If discovery doesn't reveal temp/RH, the app may request them with a command we haven't seen. These are educated guesses based on the protocol's verb style (:TH temp/humidity, :EN environment, :WU,7 higher mode). Send one, then watch for new data.</div>
+</div>
+
+<div class="panel">
+  <h2>Raw + decoded log <button style="float:right;min-height:auto;padding:4px 9px;font-size:10px" onclick="clearLog()">Clear</button> <button style="float:right;min-height:auto;padding:4px 9px;font-size:10px;margin-right:6px" onclick="copyLog()">Copy</button></h2>
+  <div class="log" id="log"></div>
+  <div class="note">Green/gold = FFF2 wind data. <span style="color:#ff9ed8">Pink «OTHER»</span> = data from any other notify characteristic (where temp/RH would appear). Purple = handshake TX.</div>
+</div>
+
+<script>
+'use strict';
+const SVC='49535343-fe7d-4ae5-8fa9-9fafd205e455';
+const FFF2_FRAG='fff2';
+let dev=null, fff1=null, fff2=null;
+let rxBuffer='';
+let lastWuTime=0, wuCount=0, staleTimer=null;
+let pendingGK=null, kaTimer=null, sawIdle=false;
+let allNotifyChars=[];
+
+const HANDSHAKE=[':DU,1668647648,A7',':GK',':PS,1,1,9F',':WU,5',':WU,6',':VR'];
+const KEEPALIVE=':CC,6,86';
+const PROBES=[':TH',':EN',':WU,7',':HU',':TP',':PS,1,2,XX',':RH',':AT'];
+document.getElementById('probes').innerHTML=PROBES.map(p=>`<button class="chip" onclick="document.getElementById('cmd').value='${p}'">${p}</button>`).join('');
+
+function log(msg,cls){
+  const el=document.getElementById('log');
+  const t=new Date().toLocaleTimeString('en-GB',{hour12:false})+'.'+String(Date.now()%1000).padStart(3,'0');
+  el.innerHTML+=`<span class="${cls||'sys'}">[${t}] ${msg}</span>\n`;
+  el.scrollTop=el.scrollHeight;
+}
+function clearLog(){document.getElementById('log').innerHTML='';}
+function copyLog(){navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('log').innerText).then(()=>log('Log copied to clipboard.','sys'));}
+function setStatus(s,cls){document.getElementById('dot').className='dot '+(cls||'');document.getElementById('status').textContent=s;document.getElementById('connbtn').textContent=(dev&&dev.gatt&&dev.gatt.connected)?'Disconnect':'Connect';}
+function hexOf(bytes){return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join(' ');}
+function asciiToBytes(sentence){const out=[];for(let i=0;i<sentence.length;i++)out.push(sentence.charCodeAt(i));out.push(0x0d);out.push(0x0d);return new Uint8Array(out);}
+function parseHexInput(str){
+  if(str.trim().startsWith(':'))return Array.from(asciiToBytes(str.trim()));
+  const cleaned=str.replace(/0x/gi,' ').replace(/[,]/g,' ').trim().split(/\s+/).filter(x=>x.length);
+  const out=[];for(const tok of cleaned){const n=parseInt(tok,16);if(isNaN(n)||n<0||n>255)throw new Error('bad byte: '+tok);out.push(n);}return out;
+}
+async function writeFFF1(bytes){if(!fff1)throw new Error('FFF1 not available');if(fff1.properties.writeWithoutResponse){await fff1.writeValueWithoutResponse(bytes);}else{await fff1.writeValue(bytes);}}
+
+function setLiveTag(){
+  const tag=document.getElementById('live-tag');
+  const age=(Date.now()-lastWuTime)/1000;
+  if(lastWuTime&&age<3){tag.className='tag live';tag.textContent='LIVE · '+wuCount+' :WU';}
+  else if(lastWuTime){tag.className='tag stale';tag.textContent='STALE ('+age.toFixed(0)+'s)';}
+  else if(sawIdle){tag.className='tag idle';tag.textContent='IDLE — needs handshake';}
+  else{tag.className='tag';tag.textContent='';}
+}
+
+async function toggleBLE(){
+  if(!(navigator.bluetooth&&navigator.bluetooth.requestDevice)){alert('Web Bluetooth not supported. Use Chrome on Android or Chrome/Edge desktop over HTTPS.');return;}
+  if(dev&&dev.gatt.connected){await dev.gatt.disconnect();return;}
+  try{
+    setStatus('Scanning for WDOT-…','scan');log('Requesting device (accept all)…','sys');
+    dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC,0xFFF0,0x180F,0x1800,0x1801,0x181A,0x180A,0xFFE0,0xFFB0]});
+    log('Selected: '+dev.name+' ('+dev.id+')','hl');
+    dev.addEventListener('gattserverdisconnected',()=>{
+      setStatus('Disconnected');document.getElementById('live-tag').className='tag';document.getElementById('live-tag').textContent='';
+      log('GATT disconnected.','er');fff1=fff2=null;rxBuffer='';sawIdle=false;allNotifyChars=[];
+      if(staleTimer){clearInterval(staleTimer);staleTimer=null;}
+      if(kaTimer){clearInterval(kaTimer);kaTimer=null;document.getElementById('kabtn').textContent='Start :CC keepalive';}
+    });
+    let server=null;
+    for(let a=1;a<=3;a++){try{server=await dev.gatt.connect();await new Promise(r=>setTimeout(r,500));await server.getPrimaryServices();log('GATT connected (attempt '+a+')','sys');break;}catch(e){log('connect attempt '+a+' failed: '+e.message,'er');if(a===3)throw e;await new Promise(r=>setTimeout(r,900));}}
+
+    // === FULL SERVICE DISCOVERY ===
+    const services=await server.getPrimaryServices();
+    log('Discovered '+services.length+' primary services. Enumerating…','hl');
+    let discoHtml='';
+    allNotifyChars=[];
+    for(const svc of services){
+      let chars=[];
+      try{chars=await svc.getCharacteristics();}catch(e){log('  (cannot read chars of '+svc.uuid.slice(0,8)+': '+e.message+')','sys');continue;}
+      discoHtml+='<b>'+svc.uuid+'</b><br>';
+      for(const c of chars){
+        const props=[];
+        if(c.properties.read)props.push('read');
+        if(c.properties.write)props.push('write');
+        if(c.properties.writeWithoutResponse)props.push('writeNR');
+        if(c.properties.notify)props.push('notify');
+        if(c.properties.indicate)props.push('indicate');
+        discoHtml+='&nbsp;&nbsp;'+c.uuid.slice(4,8)+' ['+props.join(', ')+']<br>';
+        // capture FFF1/FFF2 specifically
+        if(c.uuid.includes('fff1'))fff1=c;
+        if(c.uuid.includes('fff2'))fff2=c;
+        // try reading static values (firmware, model, etc.)
+        if(c.properties.read){
+          try{
+            const val=await c.readValue();
+            const bytes=new Uint8Array(val.buffer);
+            const asc=new TextDecoder().decode(bytes).replace(/[^\x20-\x7e]/g,'.');
+            log('  READ '+c.uuid.slice(4,8)+' = '+hexOf(bytes)+'  "'+asc+'"','hl');
+          }catch(e){}
+        }
+        // subscribe to ALL notify characteristics
+        if(c.properties.notify || c.properties.indicate){
+          allNotifyChars.push(c);
+        }
+      }
+    }
+    document.getElementById('disco').innerHTML=discoHtml;
+
+    if(!fff2)throw new Error('FFF2 (notify) not found');
+
+    // Subscribe to FFF2 (wind) with the dedicated parser
+    await fff2.startNotifications();
+    fff2.addEventListener('characteristicvaluechanged',onWindPacket);
+    log('FFF2 (wind) notifications started.','hl');
+
+    // Subscribe to all OTHER notify characteristics with the generic logger
+    if(document.getElementById('subAll').checked){
+      for(const c of allNotifyChars){
+        if(c.uuid.includes('fff2'))continue; // already done
+        try{
+          await c.startNotifications();
+          const uuid=c.uuid;
+          c.addEventListener('characteristicvaluechanged',(evt)=>onOtherPacket(evt,uuid));
+          log('Subscribed to OTHER notify char '+c.uuid.slice(4,8)+' ('+c.uuid+')','other');
+        }catch(e){log('  could not subscribe '+c.uuid.slice(4,8)+': '+e.message,'sys');}
+      }
+    }
+
+    setStatus('Connected: '+dev.name,'on');
+    staleTimer=setInterval(setLiveTag,1000);
+    if(document.getElementById('autoHs').checked && fff1){
+      log('Auto-handshake in 600ms…','sys');
+      setTimeout(()=>runHandshake(),600);
+    }else if(!fff1){log('⚠ FFF1 not found — cannot send handshake.','er');}
+  }catch(e){log('ERROR: '+e.message,'er');setStatus('Error','err');dev=null;}
+}
+
+async function runHandshake(){
+  if(!fff1){alert('FFF1 not available — connect first.');return;}
+  log('=== HANDSHAKE START ===','hs');
+  for(let i=0;i<HANDSHAKE.length;i++){
+    const s=HANDSHAKE[i];
+    try{await writeFFF1(asciiToBytes(s));log('  HS['+(i+1)+'/'+HANDSHAKE.length+'] → '+s,'hs');}
+    catch(e){log('  HS['+(i+1)+'] ERROR: '+e.message,'er');}
+    await new Promise(r=>setTimeout(r,120));
+  }
+  log('=== HANDSHAKE SENT — :CC keepalive starting ===','hs');
+  try{await writeFFF1(asciiToBytes(KEEPALIVE));log('  → '+KEEPALIVE+' (initial)','hs');}catch(e){}
+  startKeepalive();
+}
+function startKeepalive(){
+  if(kaTimer)return;
+  kaTimer=setInterval(async()=>{if(fff1&&dev&&dev.gatt.connected){try{await writeFFF1(asciiToBytes(KEEPALIVE));log('  → '+KEEPALIVE+' (keepalive)','tx');}catch(e){log('keepalive err: '+e.message,'er');}}},10000);
+  document.getElementById('kabtn').textContent='Stop :CC keepalive';
+  log('Keepalive started (10s).','sys');
+}
+function toggleKeepalive(){if(kaTimer){clearInterval(kaTimer);kaTimer=null;document.getElementById('kabtn').textContent='Start :CC keepalive';log('Keepalive stopped.','sys');}else startKeepalive();}
+function stopHandshakeAndKa(){if(kaTimer){clearInterval(kaTimer);kaTimer=null;document.getElementById('kabtn').textContent='Start :CC keepalive';}log('Stopped keepalive.','sys');}
+async function sendOne(s){if(!fff1){alert('FFF1 not available.');return;}try{await writeFFF1(asciiToBytes(s));log('  → '+s,'hs');}catch(e){log('TX ERROR: '+e.message,'er');}}
+
+function onWindPacket(evt){
+  const bytes=new Uint8Array(evt.target.value.buffer);
+  if(bytes.length>=4 && bytes[0]===0x7e && bytes[bytes.length-1]===0x7e){
+    sawIdle=true;
+    let inner='';try{inner=new TextDecoder().decode(bytes.slice(7,bytes.length-3)).replace(/[^\x20-\x7e]/g,'');}catch(e){}
+    log('RX[FFF2] ['+bytes.length+'B] '+hexOf(bytes)+'  «HDLC idle» '+(inner?('inner="'+inner+'"'):''),'rx');
+    setLiveTag();return;
+  }
+  log('RX[FFF2] ['+bytes.length+'B] '+hexOf(bytes),'rx');
+  rxBuffer+=new TextDecoder().decode(bytes);
+  const sentences=rxBuffer.split('\r');
+  rxBuffer=sentences.pop();
+  for(const raw of sentences){const s=raw.trim();if(s)parseSentence(s);}
+}
+
+function onOtherPacket(evt,uuid){
+  const bytes=new Uint8Array(evt.target.value.buffer);
+  const asc=new TextDecoder().decode(bytes).replace(/[^\x20-\x7e]/g,'.');
+  const short=uuid.slice(4,8);
+  log('«OTHER» RX['+short+'] ['+bytes.length+'B] '+hexOf(bytes)+'  "'+asc+'"','other');
+  // Heuristics: standard battery 0x2A19 = single byte %
+  if(uuid.includes('2a19')&&bytes.length>=1){
+    setBatt(bytes[0]);
+  }
+  // standard ESS temperature 0x2A6E = sint16 LE, 0.01 °C
+  if(uuid.includes('2a6e')&&bytes.length>=2){
+    const t=((bytes[1]<<8)|bytes[0]); const tc=(t>32767?t-65536:t)/100;
+    document.getElementById('p-temp').textContent=tc.toFixed(1);
+  }
+  // standard ESS humidity 0x2A6F = uint16 LE, 0.01 %
+  if(uuid.includes('2a6f')&&bytes.length>=2){
+    const h=((bytes[1]<<8)|bytes[0])/100;
+    document.getElementById('p-hum').textContent=h.toFixed(1);
+  }
+  // ASCII tail like ",TT.T,HH.H" anywhere
+  const m=asc.match(/(-?\d+\.\d+),(\d+\.\d+)/);
+  if(m){
+    document.getElementById('p-temp').textContent=parseFloat(m[1]).toFixed(1);
+    document.getElementById('p-hum').textContent=parseFloat(m[2]).toFixed(1);
+    log('  → parsed temp='+m[1]+' RH='+m[2]+' from '+short,'hl');
+  }
+}
+
+function setBatt(b){const el=document.getElementById('p-batt');el.textContent=b;el.style.color=b>50?'var(--green)':b>20?'var(--gold)':'var(--red)';}
+
+function applyGK(id,battStr){
+  const batt=parseInt(battStr);
+  if(!isNaN(batt))setBatt(batt);
+  document.getElementById('device-info').innerHTML='Device ID <b>'+(id||'?')+'</b> · battery <b>'+(isNaN(batt)?'?':batt)+'%</b>';
+  log('  → :GK  id='+(id||'?')+' batt='+(isNaN(batt)?'?':batt)+'%','hl');
+}
+
+function parseSentence(s){
+  if(s.startsWith(':WU')){
+    const parts=s.split(',');
+    if(parts.length>=5){
+      const inst=parseFloat(parts[2]),avg=parseFloat(parts[3]),dir=parseFloat(parts[4]);
+      if(!isNaN(inst))document.getElementById('p-spd').textContent=inst.toFixed(1);
+      if(!isNaN(avg))document.getElementById('p-avg').textContent=avg.toFixed(1);
+      if(!isNaN(dir))document.getElementById('p-dir').textContent=Math.round(dir);
+      lastWuTime=Date.now();wuCount++;setLiveTag();
+      // If a WU ever has >6 fields, fields 6,7 may be temp,RH — surface them
+      if(parts.length>=8){
+        const t=parseFloat(parts[6]),h=parseFloat(parts[7]);
+        if(!isNaN(t))document.getElementById('p-temp').textContent=t.toFixed(1);
+        if(!isNaN(h))document.getElementById('p-hum').textContent=h.toFixed(1);
+        log('  → :WU EXTENDED — temp='+parts[6]+' RH='+parts[7]+' !!','hl');
+      }
+      log('  → :WU  inst='+(parts[2]||'?')+' avg='+(parts[3]||'?')+' dir='+(parts[4]||'?')+'° ('+parts.length+' fields)','wu');
+    }else{log('  → :WU (short/config echo): '+s,'sys');}
+  }else if(s.startsWith(':GK')){
+    const parts=s.split(',');
+    if(parts.length>=3)applyGK(parts[1],parts[2]);
+    else{pendingGK=parts[1]||'';log('  → :GK id='+(parts[1]||'?')+' (batt next frag…)','sys');}
+  }else if(pendingGK!==null && s.startsWith(',')){applyGK(pendingGK,s.replace(',','').trim());pendingGK=null;}
+  else if(s.startsWith(':VR')){
+    const parts=s.split(',');const fw=(parts[1]||'').trim();
+    const ex=document.getElementById('device-info').innerHTML;
+    document.getElementById('device-info').innerHTML=ex+(ex?' · ':'')+'firmware <b>'+fw+'</b>';
+    log('  → :VR firmware='+fw+' date='+((parts[2]||'').trim()),'hl');
+  }else if(s.startsWith(':AK')){log('  → :AK','sys');}
+  else if(s.startsWith(':CC')){log('  → :CC '+s,'sys');}
+  else{log('  → ?? unknown: '+s,'sys');}
+}
+
+async function sendCmd(){
+  if(!fff1){alert('FFF1 not available (connect first).');return;}
+  let bytes;try{bytes=parseHexInput(document.getElementById('cmd').value);}catch(e){alert('Parse error: '+e.message);return;}
+  if(!bytes.length){alert('Enter a sentence or hex bytes.');return;}
+  const arr=new Uint8Array(bytes);
+  try{await writeFFF1(arr);log('TX → FFF1: '+hexOf(arr)+'  ('+new TextDecoder().decode(arr).replace(/[^\x20-\x7e]/g,'.')+')','tx');}catch(e){log('TX ERROR: '+e.message,'er');}
+}
+log('Harness V4 ready. Connect — discovers all services, subscribes to every notify char, runs handshake. Watch pink «OTHER» lines + discovery panel for temp/RH. BLE needs HTTPS.','sys');
+</script>
+</body>
+</html>
