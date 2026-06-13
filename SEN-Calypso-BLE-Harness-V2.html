@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0f">
+<title>SEN Calypso BLE Harness V2</title>
+<style>
+:root{--bg:#0a0c0f;--bg2:#11141a;--bg3:#171b22;--border:rgba(255,255,255,.1);--text:#f4f3ef;--text2:#bdbab1;--text3:#6f6d67;--accent:#7eb8c4;--gold:#c8a96e;--green:#7ab87a;--warn:#e07a5f;--red:#d4574e;--mono:'IBM Plex Mono','SF Mono',Menlo,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.5;max-width:760px;margin:0 auto;padding:14px calc(14px) calc(40px + env(safe-area-inset-bottom))}
+h1{font-size:17px;font-weight:700;margin-bottom:2px}
+.sub{font-size:10px;color:var(--text3);margin-bottom:14px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+.panel h2{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+button{font-family:var(--mono);cursor:pointer;font-size:12px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);min-height:42px}
+button.primary{background:var(--accent);color:#0a0c0f;border-color:var(--accent);font-weight:600}
+button.warn{color:var(--warn);border-color:rgba(224,122,95,.4)}
+button:disabled{opacity:.4;pointer-events:none}
+input{font-family:var(--mono);font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px;width:100%;min-height:40px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1}
+.row button{flex:0 0 auto}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--text3);display:inline-block;margin-right:7px;vertical-align:middle}
+.dot.on{background:var(--green)}.dot.scan{background:var(--gold);animation:p 1s infinite}.dot.err{background:var(--red)}
+@keyframes p{50%{opacity:.4}}
+.scs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.sc{flex:1;min-width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px}
+.sc .l{font-size:8px;color:var(--text3);text-transform:uppercase}
+.sc .v{font-size:20px;font-weight:700;color:var(--accent)}
+.sc .u{font-size:8px;color:var(--text2)}
+.log{background:#06080b;border:1px solid var(--border);border-radius:8px;padding:10px;height:280px;overflow-y:auto;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.log .rx{color:var(--green)}.log .tx{color:var(--gold)}.log .sys{color:var(--text3)}.log .er{color:var(--red)}.log .hl{color:var(--accent);font-weight:600}.log .wu{color:var(--gold);font-weight:600}
+.note{font-size:10px;color:var(--text3);line-height:1.7;margin-top:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{flex:0 0 auto;font-size:11px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);min-height:auto}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;margin-left:8px}
+.tag.stale{background:rgba(224,122,95,.15);color:var(--warn)}
+.tag.live{background:rgba(122,184,122,.15);color:var(--green)}
+.kv{font-size:10px;color:var(--text2);line-height:1.8}
+.kv b{color:var(--accent)}
+.info-line{font-size:10px;color:var(--text2);margin-top:6px}
+.info-line b{color:var(--gold)}
+</style>
+</head>
+<body>
+<h1>SEN · Calypso BLE Harness <span style="font-size:11px;color:var(--text3)">V2</span></h1>
+<div class="sub">Branch 1.6.3 · ASCII text protocol decoder for the Calypso Mini AB (WDOT-XXXXXX). Protocol decoded from HCI snoop log: colon-prefixed CR-terminated sentences (:WU / :GK / :VR / :AK / :CC). No FFF1 activation needed — subscribe to FFF2 and data streams live. Chrome on Android or desktop · HTTPS required.</div>
+
+<div class="panel">
+  <h2>Connection</h2>
+  <div class="row">
+    <span style="flex:1"><span class="dot" id="dot"></span><span id="status">Disconnected</span></span>
+    <button class="primary" id="connbtn" onclick="toggleBLE()">Connect</button>
+  </div>
+  <div class="kv" id="conn-detail" style="margin-top:10px"></div>
+  <div class="info-line" id="device-info"></div>
+</div>
+
+<div class="panel">
+  <h2>Live wind <span class="tag" id="live-tag"></span></h2>
+  <div class="scs">
+    <div class="sc"><div class="l">Instant</div><div class="v" id="p-spd">—</div><div class="u">m/s</div></div>
+    <div class="sc"><div class="l">Average</div><div class="v" id="p-avg">—</div><div class="u">m/s</div></div>
+    <div class="sc"><div class="l">Direction</div><div class="v" id="p-dir">—</div><div class="u">deg</div></div>
+    <div class="sc"><div class="l">Battery</div><div class="v" id="p-batt" style="font-size:15px">—</div><div class="u">%</div></div>
+  </div>
+  <div class="note" id="parse-note">:WU,2,&lt;instant&gt;,&lt;avg&gt;,&lt;dir&gt;,&lt;chk&gt; · speed in m/s · direction in degrees (0 = N). Battery from :GK at connect.</div>
+</div>
+
+<div class="panel">
+  <h2>Send command to FFF1 · optional</h2>
+  <div class="row">
+    <input id="cmd" placeholder="hex bytes e.g.  3a 41 4b 0d   or   :AK" value="">
+    <button class="primary" onclick="sendCmd()">Send</button>
+  </div>
+  <div class="chips" id="presets"></div>
+  <div class="note">FFF1 (handle 0x000d) is <b>not required</b> for streaming — the device sends live data the moment you subscribe to FFF2. This sender is kept only for future use (e.g. config commands). Accepts hex (<b>3a 41 4b 0d</b>) or an ASCII sentence prefixed with <b>:</b> which will be sent as text + CR.</div>
+</div>
+
+<div class="panel">
+  <h2>Raw + decoded log <button style="float:right;min-height:auto;padding:4px 9px;font-size:10px" onclick="clearLog()">Clear</button> <button style="float:right;min-height:auto;padding:4px 9px;font-size:10px;margin-right:6px" onclick="copyLog()">Copy</button></h2>
+  <div class="log" id="log"></div>
+  <div class="note">Raw chunks reassembled on CR (\r). Each complete sentence is decoded and shown. :WU sentences (live wind) are highlighted gold.</div>
+</div>
+
+<div class="panel">
+  <h2>Protocol reference</h2>
+  <div class="note" style="color:var(--text2)">
+  <b style="color:var(--accent)">:WU,2,inst,avg,dir,chk</b> — wind update, ~1/sec. inst &amp; avg in m/s, dir in degrees, chk = hex checksum.<br>
+  <b style="color:var(--accent)">:GK,id,batt</b> — device ID + battery %. Sent once at connect.<br>
+  <b style="color:var(--accent)">:VR,ver,date,chk</b> — firmware version. Sent once at connect.<br>
+  <b style="color:var(--accent)">:AK</b> — acknowledge, sent a few times at connect. Ignored.<br>
+  <b style="color:var(--accent)">:CC,…</b> — calibration/config, ~every 10s. Ignored.<br>
+  Service <b>49535343-fe7d-4ae5-8fa9-9fafd205e455</b> · FFF1 write @0x000d · FFF2 notify @0x000f.
+  </div>
+</div>
+
+<script>
+'use strict';
+const SVC='49535343-fe7d-4ae5-8fa9-9fafd205e455';
+const FFF1='0000fff1-0000-1000-8000-00805f9b34fb';
+const FFF2='0000fff2-0000-1000-8000-00805f9b34fb';
+let dev=null, fff1=null, fff2=null;
+let rxBuffer='';
+let lastWuTime=0, wuCount=0, staleTimer=null;
+let pendingGK=null; // :GK arrives split by a stray CR before the battery field
+
+const PRESETS=[':AK',':GK',':VR','3a 41 4b 0d','0x02'];
+document.getElementById('presets').innerHTML=PRESETS.map(p=>`<button class="chip" onclick="document.getElementById('cmd').value='${p}'">${p}</button>`).join('');
+
+function log(msg,cls){
+  const el=document.getElementById('log');
+  const t=new Date().toLocaleTimeString('en-GB',{hour12:false})+'.'+String(Date.now()%1000).padStart(3,'0');
+  el.innerHTML+=`<span class="${cls||'sys'}">[${t}] ${msg}</span>\n`;
+  el.scrollTop=el.scrollHeight;
+}
+function clearLog(){document.getElementById('log').innerHTML='';}
+function copyLog(){navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('log').innerText).then(()=>log('Log copied to clipboard.','sys'));}
+function setStatus(s,cls){document.getElementById('dot').className='dot '+(cls||'');document.getElementById('status').textContent=s;document.getElementById('connbtn').textContent=(dev&&dev.gatt&&dev.gatt.connected)?'Disconnect':'Connect';}
+function hexOf(bytes){return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join(' ');}
+
+function parseHexInput(str){
+  // If it starts with ':' treat as ASCII sentence + CR
+  if(str.trim().startsWith(':')){
+    const txt=str.trim();
+    const out=[];for(let i=0;i<txt.length;i++)out.push(txt.charCodeAt(i));out.push(0x0d);return out;
+  }
+  const cleaned=str.replace(/0x/gi,' ').replace(/[,]/g,' ').trim().split(/\s+/).filter(x=>x.length);
+  const out=[];for(const tok of cleaned){const n=parseInt(tok,16);if(isNaN(n)||n<0||n>255)throw new Error('bad byte: '+tok);out.push(n);}return out;
+}
+
+function setLiveTag(){
+  const tag=document.getElementById('live-tag');
+  const age=(Date.now()-lastWuTime)/1000;
+  if(lastWuTime&&age<3){tag.className='tag live';tag.textContent='LIVE · '+wuCount+' :WU';}
+  else if(lastWuTime){tag.className='tag stale';tag.textContent='STALE ('+age.toFixed(0)+'s, last value held)';}
+  else{tag.className='tag';tag.textContent='';}
+}
+
+async function toggleBLE(){
+  if(!(navigator.bluetooth&&navigator.bluetooth.requestDevice)){alert('Web Bluetooth not supported. Use Chrome on Android or Chrome/Edge desktop over HTTPS.');return;}
+  if(dev&&dev.gatt.connected){await dev.gatt.disconnect();return;}
+  try{
+    setStatus('Scanning for WDOT-…','scan');log('Requesting device (accept all, optional service '+SVC.slice(0,8)+'…)','sys');
+    dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC,0xFFF0,0x180F,0x1800,0x1801]});
+    log('Selected: '+dev.name+' ('+dev.id+')','hl');
+    dev.addEventListener('gattserverdisconnected',()=>{
+      setStatus('Disconnected');
+      document.getElementById('live-tag').className='tag';document.getElementById('live-tag').textContent='';
+      log('GATT disconnected.','er');fff1=fff2=null;rxBuffer='';
+      if(staleTimer){clearInterval(staleTimer);staleTimer=null;}
+    });
+    let server=null;
+    for(let a=1;a<=3;a++){try{server=await dev.gatt.connect();await new Promise(r=>setTimeout(r,500));await server.getPrimaryServices();log('GATT connected (attempt '+a+')','sys');break;}catch(e){log('connect attempt '+a+' failed: '+e.message,'er');if(a===3)throw e;await new Promise(r=>setTimeout(r,900));}}
+    const svc=await server.getPrimaryService(SVC);
+    const chars=await svc.getCharacteristics();
+    log('Service '+SVC.slice(0,8)+'… characteristics: '+chars.map(c=>c.uuid.slice(4,8)).join(', '),'sys');
+    fff1=chars.find(c=>c.uuid.includes('fff1'))||null;
+    fff2=chars.find(c=>c.uuid.includes('fff2'))||null;
+    let detail='';
+    chars.forEach(c=>{const p=[];if(c.properties.read)p.push('read');if(c.properties.write)p.push('write');if(c.properties.writeWithoutResponse)p.push('writeNR');if(c.properties.notify)p.push('notify');detail+=`<b>${c.uuid.slice(4,8)}</b>: ${p.join(', ')}<br>`;});
+    document.getElementById('conn-detail').innerHTML=detail;
+    if(!fff2)throw new Error('FFF2 (notify) not found');
+    await fff2.startNotifications();
+    fff2.addEventListener('characteristicvaluechanged',onPacket);
+    log('FFF2 notifications started. Data should stream immediately (no FFF1 write needed)…','hl');
+    if(!fff1)log('⚠ FFF1 (write) not found — but it is not needed for streaming.','sys');
+    setStatus('Connected: '+dev.name,'on');
+    staleTimer=setInterval(setLiveTag,1000);
+  }catch(e){log('ERROR: '+e.message,'er');setStatus('Error','err');dev=null;}
+}
+
+function onPacket(evt){
+  const bytes=new Uint8Array(evt.target.value.buffer);
+  log('RX ['+bytes.length+'B] '+hexOf(bytes),'rx');
+  // ASCII protocol: accumulate and split on CR
+  rxBuffer+=new TextDecoder().decode(bytes);
+  const sentences=rxBuffer.split('\r');
+  rxBuffer=sentences.pop(); // keep incomplete tail
+  for(const raw of sentences){
+    const s=raw.trim();
+    if(!s)continue;
+    parseSentence(s);
+  }
+}
+
+function applyGK(id,battStr){
+  const batt=parseInt(battStr);
+  if(!isNaN(batt)){
+    const el=document.getElementById('p-batt');
+    el.textContent=batt;
+    el.style.color = batt>50?'var(--green)':batt>20?'var(--gold)':'var(--red)';
+  }
+  document.getElementById('device-info').innerHTML='Device ID <b>'+(id||'?')+'</b> · battery <b>'+(isNaN(batt)?'?':batt)+'%</b>';
+  log('  → :GK  id='+(id||'?')+' batt='+(isNaN(batt)?'?':batt)+'%','hl');
+}
+
+function parseSentence(s){
+  if(s.startsWith(':WU')){
+    const parts=s.split(',');
+    if(parts.length>=5){
+      const inst=parseFloat(parts[2]);
+      const avg=parseFloat(parts[3]);
+      const dir=parseFloat(parts[4]);
+      if(!isNaN(inst))document.getElementById('p-spd').textContent=inst.toFixed(1);
+      if(!isNaN(avg))document.getElementById('p-avg').textContent=avg.toFixed(1);
+      if(!isNaN(dir))document.getElementById('p-dir').textContent=Math.round(dir);
+      lastWuTime=Date.now();wuCount++;
+      setLiveTag();
+    }
+    log('  → :WU  inst='+(parts[2]||'?')+' avg='+(parts[3]||'?')+' dir='+(parts[4]||'?')+'°','wu');
+  }else if(s.startsWith(':GK')){
+    const parts=s.split(',');
+    // :GK arrives as ":GK,<id>\r,<batt>\r" — the battery field is split off by a stray CR.
+    if(parts.length>=3){
+      applyGK(parts[1],parts[2]);
+    }else{
+      // battery not in this fragment yet — hold and wait for the ",<batt>" continuation
+      pendingGK=parts[1]||'';
+      log('  → :GK  id='+(parts[1]||'?')+' (battery in next fragment…)','sys');
+    }
+  }else if(pendingGK!==null && s.startsWith(',')){
+    // continuation fragment carrying the battery value, e.g. ",85"
+    const batt=s.replace(',','').trim();
+    applyGK(pendingGK,batt);
+    pendingGK=null;
+  }else if(s.startsWith(':VR')){
+    const parts=s.split(',');
+    const fw=(parts[1]||'').trim();
+    const existing=document.getElementById('device-info').innerHTML;
+    document.getElementById('device-info').innerHTML=existing+(existing?' · ':'')+'firmware <b>'+fw+'</b>';
+    log('  → :VR  firmware='+fw+' date='+((parts[2]||'').trim()),'hl');
+  }else if(s.startsWith(':AK')){
+    log('  → :AK  (acknowledge)','sys');
+  }else if(s.startsWith(':CC')){
+    log('  → :CC  (config/cal, ignored)','sys');
+  }else{
+    log('  → ?? unknown sentence: '+s,'sys');
+  }
+}
+
+async function sendCmd(){
+  if(!fff1){alert('FFF1 write characteristic not available (connect first).');return;}
+  let bytes;
+  try{bytes=parseHexInput(document.getElementById('cmd').value);}catch(e){alert('Parse error: '+e.message);return;}
+  if(!bytes.length){alert('Enter at least one byte or an ASCII sentence.');return;}
+  const arr=new Uint8Array(bytes);
+  try{
+    if(fff1.properties.write){await fff1.writeValue(arr);}
+    else if(fff1.properties.writeWithoutResponse){await fff1.writeValueWithoutResponse(arr);}
+    else{await fff1.writeValue(arr);}
+    log('TX → FFF1: '+hexOf(arr),'tx');
+  }catch(e){log('TX ERROR: '+e.message,'er');}
+}
+log('Harness V2 ready. ASCII protocol decoder. Connect to begin — data should stream live with no activation command. BLE needs HTTPS.','sys');
+</script>
+</body>
+</html>
